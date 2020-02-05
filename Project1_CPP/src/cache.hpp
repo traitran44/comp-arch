@@ -18,7 +18,15 @@
 #include <cstdbool>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 
+struct tag {
+  bool valid;
+  bool dirty;
+  uint64_t tag_id;
+};
+
+using namespace std;
 
 // Constants
 enum write_policy {WBWA = 1, WTWNA = 2};
@@ -32,6 +40,12 @@ static const char STORE = 'S';
 static const char INST = 'I';
 static const uint8_t TRUE = 1;
 static const uint8_t FALSE = 0;
+static const uint64_t NUM_ADDR_BITS = 48;
+
+static vector<vector<tag>> l1_i_cache;
+static vector<vector<tag>> l1_d_cache;
+static vector<vector<tag>> l2_cache;
+
 
 // Access time constants
 static const uint16_t MAX_S = 3;
