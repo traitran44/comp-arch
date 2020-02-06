@@ -10,9 +10,9 @@ project(cachesim
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(SRC_FILES "${CMAKE_SOURCE_DIR}/src/cachesim_driver.cpp"
-              "${CMAKE_SOURCE_DIR}/src/cache.cpp"
-              "${CMAKE_SOURCE_DIR}/src/cache.hpp"
-              "${CMAKE_SOURCE_DIR}/src/util/jsmn.h")
+        "${CMAKE_SOURCE_DIR}/src/cache.cpp"
+        "${CMAKE_SOURCE_DIR}/src/cache.hpp"
+        "${CMAKE_SOURCE_DIR}/src/util/jsmn.h")
 
 # Sets required flags
 set(CMAKE_CXX_STANDARD 11)

@@ -19,6 +19,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include "util/jsmn.h"
+
+using namespace std;
+
+#define TAG_MASK(addr, c, s) (addr >> (c - s))
+#define INDX_MASK(addr, b) ((addr >> b) & ((1 << b) - 1))
 
 struct tag {
   bool valid;
@@ -26,11 +32,11 @@ struct tag {
   uint64_t tag_id;
 };
 
-using namespace std;
 
 // Constants
 enum write_policy {WBWA = 1, WTWNA = 2};
 enum replacement_policy {LRU = 1, LFU = 2, FIFO = 3};
+enum status {MISS = 0, HIT = 1};
 
 static const char *const write_policy_map[] = {"NA", "WBWA", "WTWNA"};
 static const char *const replacement_policy_map[] = {"NA", "LRU", "LFU", "FIFO"};
@@ -46,6 +52,17 @@ static vector<vector<tag>> l1_i_cache;
 static vector<vector<tag>> l1_d_cache;
 static vector<vector<tag>> l2_cache;
 
+static uint64_t i_index_bits;
+static uint64_t d_index_bits;
+static uint64_t l2_index_bits;
+
+static uint64_t i_offset_bits;
+static uint64_t d_offset_bits;
+static uint64_t l2_offset_bits;
+
+static uint64_t i_tag_bits;
+static uint64_t d_tag_bits;
+static uint64_t l2_tag_bits;
 
 // Access time constants
 static const uint16_t MAX_S = 3;

@@ -4,8 +4,8 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/home/mai/Desktop/comp-arch/Project1_CPP/src/cache.cpp" "/home/mai/Desktop/comp-arch/Project1_CPP/cmake-build-debug/CMakeFiles/cachesim.dir/src/cache.cpp.o"
-  "/home/mai/Desktop/comp-arch/Project1_CPP/src/cachesim_driver.cpp" "/home/mai/Desktop/comp-arch/Project1_CPP/cmake-build-debug/CMakeFiles/cachesim.dir/src/cachesim_driver.cpp.o"
+  "/home/tt/Downloads/comp-arch/Project1_CPP/src/cache.cpp" "/home/tt/Downloads/comp-arch/Project1_CPP/CMakeFiles/cachesim.dir/src/cache.cpp.o"
+  "/home/tt/Downloads/comp-arch/Project1_CPP/src/cachesim_driver.cpp" "/home/tt/Downloads/comp-arch/Project1_CPP/CMakeFiles/cachesim.dir/src/cachesim_driver.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
 
