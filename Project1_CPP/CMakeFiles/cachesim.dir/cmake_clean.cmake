@@ -1,8 +1,8 @@
 file(REMOVE_RECURSE
-  "CMakeFiles/cachesim.dir/src/cachesim_driver.cpp.o"
   "CMakeFiles/cachesim.dir/src/cache.cpp.o"
-  "cachesim.pdb"
+  "CMakeFiles/cachesim.dir/src/cachesim_driver.cpp.o"
   "cachesim"
+  "cachesim.pdb"
 )
 
 # Per-language clean rules from dependency scanning.

@@ -33,3 +33,4 @@ set(CMAKE_BUILD_TYPE Debug)
 
 # Generate executable
 add_executable(cachesim ${SRC_FILES})
+

@@ -32,11 +32,17 @@ struct tag {
   uint64_t tag_id;
 };
 
+struct cache_set {
+    int tag_count;
+    int limit_size;
+    vector<tag> tags;
+};
+
 
 // Constants
 enum write_policy {WBWA = 1, WTWNA = 2};
 enum replacement_policy {LRU = 1, LFU = 2, FIFO = 3};
-enum status {MISS = 0, HIT = 1};
+enum type_miss {COLD_MISS, CAPACITY_MISS, HIT};
 
 static const char *const write_policy_map[] = {"NA", "WBWA", "WTWNA"};
 static const char *const replacement_policy_map[] = {"NA", "LRU", "LFU", "FIFO"};
@@ -48,9 +54,9 @@ static const uint8_t TRUE = 1;
 static const uint8_t FALSE = 0;
 static const uint64_t NUM_ADDR_BITS = 48;
 
-static vector<vector<tag>> l1_i_cache;
-static vector<vector<tag>> l1_d_cache;
-static vector<vector<tag>> l2_cache;
+static vector<cache_set> l1_i_cache;
+static vector<cache_set> l1_d_cache;
+static vector<cache_set> l2_cache;
 
 static uint64_t i_index_bits;
 static uint64_t d_index_bits;
