@@ -35,9 +35,9 @@ void cache_write(cache_set &l1_set, uint64_t l1_tag, cache_set &l2_set, uint64_t
 void cache_inst(cache_set &l1_set, uint64_t l1_tag, cache_set &l2_set, uint64_t l2_tag, sim_stats_t *sim_stats,
                 sim_config_t *sim_conf);
 
-type_miss cache_miss(cache_set &cache_set, uint64_t tag);
+bool cache_miss(cache_set &cache_set, uint64_t tag);
 
-void cache_replace(cache_set &t_set, uint64_t tag, sim_config_t *sim_conf, sim_stats_t *sim_stats);
+void cache_read_replace(cache_set &t_set, uint64_t new_tag, sim_config_t *sim_conf, sim_stats_t *sim_stats);
 
 int get_victim(cache_set &tag_set, sim_config_t *sim_conf);
 
@@ -61,10 +61,15 @@ void cache_init(uint64_t tag_bits, uint64_t index_bits, uint64_t offset_bits, ui
                 vector<cache_set> &cache) {
     uint64_t num_sets = 1 << index_bits;
     vector<cache_set> tmp_cache(num_sets);
-    for (int i = 0; i < num_sets; i++) {
+    for (int i = 0; i < num_sets; i++) { // init set
         tmp_cache[i].tags = vector<tag>(num_of_ways);
         tmp_cache[i].limit_size = num_of_ways;
         tmp_cache[i].tag_count = 0;
+        for (int j = 0; j < num_of_ways; j++) { // init tag
+            tmp_cache[i].tags[j].valid = false;
+            tmp_cache[i].tags[j].dirty = false;
+            tmp_cache[i].tags[j].tag_id = 0;
+        }
     }
     cache = tmp_cache;
 }
@@ -142,7 +147,7 @@ void print_cache_dim(vector<cache_set> cache) {
  * @param sim_stats Pointer to simulation statistics structure - Should be populated here
  * @param sim_conf Pointer to the simulation configuration structure - Don't modify it in this function
  */
-void cache_access(uint64_t addr, char type, struct sim_stats_t *sim_stats, struct sim_config_t *sim_conf) {
+void cache_access(uint64_t addr, char type, uint64_t line_count, struct sim_stats_t *sim_stats, struct sim_config_t *sim_conf) {
     uint64_t tag_l2 = TAG_MASK(addr, sim_conf->l2unified.c, sim_conf->l2unified.s);
     uint64_t indx_l2 = INDX_MASK(addr, sim_conf->l2unified.b);
     uint64_t tag_d;
@@ -191,25 +196,33 @@ void cache_read(cache_set &l1_set, uint64_t l1_tag, cache_set &l2_set,
         if (cache_miss(l2_set, l2_tag)) {
             sim_stats->l2unified_num_misses++;
             sim_stats->l2unified_num_misses_loads++;
-            cache_replace(l2_set, l2_tag, sim_conf, sim_stats);
+            cache_read_replace(l2_set, l2_tag, sim_conf, sim_stats);
         }
-        cache_replace(l1_set, l1_tag, sim_conf, sim_stats);
+        update_tag(l2_set, l2_tag);
+        cache_read_replace(l1_set, l1_tag, sim_conf, sim_stats);
     }
+    update_tag(l1_set, l1_tag);
 }
 
-void cache_replace(cache_set &t_set, uint64_t new_tag,
-                   sim_config_t *sim_conf, sim_stats_t *sim_stats) {
+void cache_read_replace(cache_set &t_set, uint64_t new_tag,
+                        sim_config_t *sim_conf, sim_stats_t *sim_stats) {
+    int replace_indx = -1;
     if (t_set.tag_count < t_set.limit_size) {
-        t_set.tags[t_set.tag_count].valid = true;
-        t_set.tags[t_set.tag_count].dirty = false;
-        t_set.tags[t_set.tag_count].tag_id = new_tag;
+        replace_indx = t_set.tag_count;
         t_set.tag_count++;
     } else {
         int victim_indx = get_victim(t_set, sim_conf);
-        t_set.tags[victim_indx].valid = true;
-        t_set.tags[victim_indx].dirty = false;
-        t_set.tags[victim_indx].tag_id = new_tag;
+        replace_indx = victim_indx;
     }
+    if (replace_indx < 0) {
+        cout << "Replace Indx < 0!" << endl;
+    }
+    t_set.tags[replace_indx].valid = true;
+    t_set.tags[replace_indx].dirty = false;
+    t_set.tags[replace_indx].access_count = 0;
+    t_set.tags[replace_indx].time = -1;
+
+    t_set.tags[replace_indx].tag_id = new_tag;
 }
 
 
@@ -243,15 +256,13 @@ int get_victim(cache_set &tag_set, sim_config_t *sim_conf) {
  * @param tag
  * @return
  */
-type_miss cache_miss(vector<tag> &cache_set, uint64_t tag) {
-    int empty_tag = 0;
-    for (auto &t : cache_set) {
-        if (!t.valid) empty_tag++;
+bool cache_miss(cache_set &cache_set, uint64_t tag) {
+    for (auto &t : cache_set.tags) {
         if (t.tag_id == tag && t.valid) {
-            return HIT;
+            return true;
         }
     }
-    return empty_tag == cache_set.size() ? COLD_MISS : CAPACITY_MISS;
+    return false;
 }
 
 

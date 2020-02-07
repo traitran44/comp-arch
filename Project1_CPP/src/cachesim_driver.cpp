@@ -316,10 +316,12 @@ int main(int argc, char *const argv[])
     // Run the simulator -- one access at a time
     char type;
     uint64_t addr;
+    uint64_t line_count = 0;
     while (!feof(trace)) {
         int ret = fscanf(trace, "%c %" PRIx64 "\n", &type, &addr);
         if (ret == 2) {
-            cache_access(addr, type, &sim_stats, &sim_conf);
+            cache_access(addr, type, line_count, &sim_stats, &sim_conf);
+            line_count++;
         }
     }
 

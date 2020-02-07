@@ -30,6 +30,8 @@ struct tag {
   bool valid;
   bool dirty;
   uint64_t tag_id;
+  int time;
+  int access_count;
 };
 
 struct cache_set {
@@ -161,7 +163,7 @@ struct sim_stats_t {
 
 // Visible functions
 void sim_init(struct sim_config_t *sim_conf);
-void cache_access(uint64_t addr, char type, struct sim_stats_t *sim_stats, struct sim_config_t *sim_conf);
+void cache_access(uint64_t addr, char type, uint64_t line_count, struct sim_stats_t *sim_stats, struct sim_config_t *sim_conf);
 void sim_cleanup(struct sim_stats_t *sim_stats, struct sim_config_t *sim_conf);
 
 #endif // CACHE_H
