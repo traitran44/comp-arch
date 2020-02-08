@@ -19,7 +19,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
-#include "util/jsmn.h"
+#include <queue>
 
 using namespace std;
 
@@ -38,12 +38,14 @@ struct cache_set {
     int tag_count;
     int limit_size;
     vector<tag> tags;
+    queue<int> replace_q;
 };
 
 
 // Constants
 enum write_policy {WBWA = 1, WTWNA = 2};
 enum replacement_policy {LRU = 1, LFU = 2, FIFO = 3};
+enum cache_level {L1D = 1, L1I = 2, L2 = 3};
 enum type_miss {COLD_MISS, CAPACITY_MISS, HIT};
 
 static const char *const write_policy_map[] = {"NA", "WBWA", "WTWNA"};

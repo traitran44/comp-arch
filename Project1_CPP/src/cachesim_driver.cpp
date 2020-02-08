@@ -18,10 +18,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <iostream>
 
-#include "util/jsmn.h"
 #include "cache.hpp"
+#include "util/jsmn.h"
 
+using namespace std;
 
 // Print error usage
 static void print_err_usage(std::string err)
