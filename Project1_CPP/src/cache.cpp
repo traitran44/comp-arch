@@ -49,8 +49,9 @@ void l1_data_cache_write(cache_set &l1_set, uint64_t l1_tag, cache_set &l2_set, 
 void l2_data_cache_write(cache_set &l2_set, uint64_t l2_tag, uint64_t line_count,
                          sim_stats_t *sim_stats, sim_config_t *sim_conf);
 
-int l2_cache_inst_read(cache_set &l2_set, uint64_t l2_tag, uint64_t line_count,
+int l2_inst_cache_read(cache_set &l2_set, uint64_t l2_tag, uint64_t line_count,
                        sim_stats_t *sim_stats, sim_config_t *sim_conf);
+
 // Use this for printing errors while debugging your code
 // Most compilers support the __LINE__ argument with a %d argument type
 // Example: print_error_exit("Error: Could not allocate memory %d", __LINE__);
@@ -73,7 +74,7 @@ void cache_init(uint64_t tag_bits, uint64_t index_bits, uint64_t offset_bits, ui
     vector<cache_set> tmp_cache(num_sets);
     for (int i = 0; i < num_sets; i++) { // init set
         tmp_cache[i].tags = vector<tag>(num_of_ways);
-        tmp_cache[i].limit_size = num_of_ways;
+        tmp_cache[i].limit_set_size = num_of_ways;
         tmp_cache[i].tag_count = 0;
         for (int j = 0; j < num_of_ways; j++) { // init tag
             tmp_cache[i].tags[j].valid = false;
@@ -196,7 +197,7 @@ void l1_inst_cache_read(cache_set &l1_set, uint64_t l1_tag, cache_set &l2_set, u
     l1_hit_indx = cache_hit(l1_set, l1_tag);
     if (l1_hit_indx < 0) { // L1 Cache Miss
         sim_stats->l1inst_num_misses++;
-        l2_cache_inst_read(l2_set, l2_tag, line_count, sim_stats, sim_conf);
+        l2_inst_cache_read(l2_set, l2_tag, line_count, sim_stats, sim_conf);
         install_block(l1_set, l1_tag, line_count, sim_conf, sim_stats, L1I);
     } else { // L1 Cache Hit
         l1_set.tags[l1_hit_indx].access_count++;
@@ -248,7 +249,7 @@ void l1_data_cache_write(cache_set &l1_set, uint64_t l1_tag, cache_set &l2_set, 
                 sim_stats->l1data_num_misses_stores++;
                 l2_data_cache_write(l2_set, l2_tag, line_count, sim_stats, sim_conf);
                 install_block(l1_set, l1_tag, line_count, sim_conf, sim_stats, L1D);
-                // Transfer block from Mem to L1 Cache
+                // Transfer block from Mem to L1 Cache on miss
                 sim_stats->l2unified_num_bytes_transferred += (((uint64_t) 1) << sim_conf->l1data.b);
             } else { // L1 Write Hit
                 l1_set.tags[l1_hit_indx].valid = true;
@@ -267,6 +268,7 @@ void l1_data_cache_write(cache_set &l1_set, uint64_t l1_tag, cache_set &l2_set, 
             } else { // Write Miss
                 l2_data_cache_write(l2_set, l2_tag, line_count, sim_stats, sim_conf);
             }
+            // Transfer to memory anyway
             sim_stats->l2unified_num_bytes_transferred += ((uint64_t) 1) << sim_conf->l1data.b;
             break;
         default:
@@ -292,7 +294,7 @@ void l1_data_cache_read(cache_set &l1_set, uint64_t l1_tag, cache_set &l2_set, u
     }
 }
 
-int l2_cache_inst_read(cache_set &l2_set, uint64_t l2_tag, uint64_t line_count,
+int l2_inst_cache_read(cache_set &l2_set, uint64_t l2_tag, uint64_t line_count,
                        sim_stats_t *sim_stats, sim_config_t *sim_conf) {
     int l2_hit_indx;
     sim_stats->l2unified_num_accesses++;
@@ -364,7 +366,7 @@ void l2_data_cache_write(cache_set &l2_set, uint64_t l2_tag, uint64_t line_count
 int install_block(cache_set &t_set, uint64_t new_tag, uint64_t line_count,
                   sim_config_t *sim_conf, sim_stats_t *sim_stats, cache_level lvl) {
     int replace_indx = -1;
-    if (t_set.tag_count < t_set.limit_size) { // Cold miss
+    if (t_set.tag_count < t_set.limit_set_size) { // Compulsory miss
         replace_indx = t_set.tag_count;
         t_set.replace_q.push(replace_indx);
         t_set.tag_count++;
@@ -381,7 +383,8 @@ int install_block(cache_set &t_set, uint64_t new_tag, uint64_t line_count,
                 case L2:
                     sim_stats->l2unified_num_evictions++;
                     if (sim_conf->wp == WBWA && t_set.tags[replace_indx].dirty) {
-                        sim_stats->l2unified_num_write_backs++;
+                        sim_stats->l2unified_num_write_backs++; // write to memory
+                        //TODO: Transfer from L2 to memory and from memory to L1?
                     }
                     break;
             }
@@ -412,7 +415,7 @@ int get_victim(cache_set &tag_set, sim_config_t *sim_conf) {
         case LRU:
             victim = get_first_valid_victim(tag_set);
             min_count = tag_set.tags[victim].time;
-            for (uint64_t i = 0; i < tag_set.tag_count; ++i) {
+            for (uint64_t i = 0; i < tag_set.tags.size(); ++i) {
                 if (tag_set.tags[i].time < min_count && tag_set.tags[i].valid) {
                     min_count = tag_set.tags[i].time;
                     victim = i;
@@ -442,7 +445,7 @@ int get_victim(cache_set &tag_set, sim_config_t *sim_conf) {
 }
 
 int get_first_valid_victim(cache_set &t_set) {
-    for (int i = 0; i < t_set.tags.size(); ++i) {
+    for (uint i = 0; i < t_set.tags.size(); ++i) {
         if (t_set.tags[i].valid) {
             return i;
         }
@@ -457,7 +460,7 @@ int get_first_valid_victim(cache_set &t_set) {
  */
 int cache_hit(cache_set &t_set, uint64_t match_tag) {
     int match_indx = -1;
-    for (int i = 0; i < t_set.tag_count; i++) {
+    for (uint i = 0; i < t_set.tags.size(); i++) {
         if (t_set.tags[i].tag_id == match_tag && t_set.tags[i].valid) {
             match_indx = i;
         }

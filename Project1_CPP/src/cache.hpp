@@ -36,7 +36,7 @@ struct tag {
 
 struct cache_set {
     int tag_count;
-    int limit_size;
+    int limit_set_size;
     vector<tag> tags;
     queue<int> replace_q;
 };
