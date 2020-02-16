@@ -25,7 +25,7 @@ using namespace std;
 
 #define TAG_MASK(addr, c, s) (addr >> (c - s))
 #define INDX_BITS(indx_mask) ((1 << indx_mask) - 1)
-#define INDX_MASK(addr, offset, indx_mask) ((addr >> offset) & INDX_BITS(indx_mask))
+#define INDX_MASK(addr, offset, indx_mask) ((addr >> offset) & INDX_BITS((indx_mask)))
 #define TOTAL_BYTES(blk_size) (((uint64_t) 1) << blk_size)
 
 struct tag {
@@ -34,6 +34,7 @@ struct tag {
     uint64_t tag_id;
     uint64_t time;
     uint64_t access_count;
+    uint64_t addr;
 };
 
 struct cache_set {
@@ -59,17 +60,19 @@ enum type_miss {
 };
 
 struct cache_access_info {
-    uint64_t l1_tag;
-    uint64_t l1_indx;
+    uint64_t addr;
 
-    uint64_t l2_tag;
-    uint64_t l2_indx;
+    uint64_t new_l1_tag;
+    uint64_t new_l1_indx;
 
-    cache_set l1_set;
-    cache_set l2_set;
+    uint64_t new_l2_tag;
+    uint64_t new_l2_indx;
 
     uint64_t line_count;
     cache_level install_lvl;
+
+    bool dirty;
+    bool update_accesses;
 };
 
 static const char *const write_policy_map[] = {"NA", "WBWA", "WTWNA"};
