@@ -24,29 +24,53 @@
 using namespace std;
 
 #define TAG_MASK(addr, c, s) (addr >> (c - s))
-#define INDX_MASK(addr, b) ((addr >> b) & ((1 << b) - 1))
+#define INDX_BITS(indx_mask) ((1 << indx_mask) - 1)
+#define INDX_MASK(addr, offset, indx_mask) ((addr >> offset) & INDX_BITS(indx_mask))
+#define TOTAL_BYTES(blk_size) (((uint64_t) 1) << blk_size)
 
 struct tag {
-  bool valid;
-  bool dirty;
-  uint64_t tag_id;
-  int time;
-  int access_count;
+    bool valid;
+    bool dirty;
+    uint64_t tag_id;
+    uint64_t time;
+    uint64_t access_count;
 };
 
 struct cache_set {
-    int tag_count;
-    int limit_set_size;
+    uint64_t tag_count;
+    uint64_t limit_set_size;
     vector<tag> tags;
-    queue<int> replace_q;
+    queue<uint64_t> replace_q;
 };
 
 
 // Constants
-enum write_policy {WBWA = 1, WTWNA = 2};
-enum replacement_policy {LRU = 1, LFU = 2, FIFO = 3};
-enum cache_level {L1D = 1, L1I = 2, L2 = 3};
-enum type_miss {COLD_MISS, CAPACITY_MISS, HIT};
+enum write_policy {
+    WBWA = 1, WTWNA = 2
+};
+enum replacement_policy {
+    LRU = 1, LFU = 2, FIFO = 3
+};
+enum cache_level {
+    L1D = 1, L1I = 2, L2 = 3
+};
+enum type_miss {
+    COLD_MISS, CAPACITY_MISS, HIT
+};
+
+struct cache_access_info {
+    uint64_t l1_tag;
+    uint64_t l1_indx;
+
+    uint64_t l2_tag;
+    uint64_t l2_indx;
+
+    cache_set l1_set;
+    cache_set l2_set;
+
+    uint64_t line_count;
+    cache_level install_lvl;
+};
 
 static const char *const write_policy_map[] = {"NA", "WBWA", "WTWNA"};
 static const char *const replacement_policy_map[] = {"NA", "LRU", "LFU", "FIFO"};
@@ -79,21 +103,21 @@ static const uint16_t MAX_S = 3;
 static const uint64_t MIN_L1_C = 9;
 static const uint64_t MAX_L1_C = 15;
 static const double L1_ACCESS_TIME[5][7] = {
-    {1, 1, 2, 2, 2, 2, 2},  // DM
-    {1, 2, 2, 2, 2, 3, 3},  // 2W
-    {2, 2, 2, 3, 3, 3, 4},  // 4W
-    {2, 3, 3, 3, 3 ,3, 4},  // 8W
-    {4, 4, 4, 5, 5, 6, 6}   // FA
+        {1, 1, 2, 2, 2, 2, 2},  // DM
+        {1, 2, 2, 2, 2, 3, 3},  // 2W
+        {2, 2, 2, 3, 3, 3, 4},  // 4W
+        {2, 3, 3, 3, 3, 3, 4},  // 8W
+        {4, 4, 4, 5, 5, 6, 6}   // FA
 };
 
 static const uint64_t MIN_L2_C = 17;
 static const uint64_t MAX_L2_C = 21;
 static const double L2_ACCESS_TIME[5][5] = {
-    {7, 8, 8, 9, 9},        // DM
-    {7, 8, 9, 10, 11},      // 2W
-    {8, 9, 10, 11, 12},     // 4W
-    {10, 12, 13, 14, 15},   // 8W
-    {15, 16, 18, 20, 22}    // FA
+        {7,  8,  8,  9,  9},        // DM
+        {7,  8,  9,  10, 11},      // 2W
+        {8,  9,  10, 11, 12},     // 4W
+        {10, 12, 13, 14, 15},   // 8W
+        {15, 16, 18, 20, 22}    // FA
 };
 
 // Struct for storing per Cache parameters
@@ -165,7 +189,10 @@ struct sim_stats_t {
 
 // Visible functions
 void sim_init(struct sim_config_t *sim_conf);
-void cache_access(uint64_t addr, char type, uint64_t line_count, struct sim_stats_t *sim_stats, struct sim_config_t *sim_conf);
+
+void cache_access(uint64_t addr, char type, uint64_t line_count, struct sim_stats_t *sim_stats,
+                  struct sim_config_t *sim_conf);
+
 void sim_cleanup(struct sim_stats_t *sim_stats, struct sim_config_t *sim_conf);
 
 #endif // CACHE_H
