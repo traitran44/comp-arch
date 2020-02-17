@@ -218,14 +218,12 @@ void cache_access(uint64_t addr, char type, uint64_t line_count,
 
 void l1_inst_cache_read(cache_access_info *access_info, sim_stats_t *sim_stats, sim_config_t *sim_conf) {
     sim_stats->l1inst_num_accesses++;
+    access_info->install_lvl = L1I;
     int l1_hit_indx;
     l1_hit_indx = cache_hit(access_info);
     if (l1_hit_indx < 0) { // L1 Cache Miss
         sim_stats->l1inst_num_misses++;
-        access_info->install_lvl = L2;
         l2_inst_cache_read(access_info, sim_stats, sim_conf);
-        access_info->install_lvl = L1I;
-        install_block(access_info, sim_conf, sim_stats);
     } else { // L1 Cache Hit
         l1_i_cache[access_info->new_l1_indx].tags[l1_hit_indx].access_count++;
         l1_i_cache[access_info->new_l1_indx].tags[l1_hit_indx].time = access_info->line_count;
@@ -234,6 +232,8 @@ void l1_inst_cache_read(cache_access_info *access_info, sim_stats_t *sim_stats, 
 
 int l2_inst_cache_read(cache_access_info *access_info, sim_stats_t *sim_stats, sim_config_t *sim_conf) {
     int l2_hit_indx;
+    cache_set *t_set = &l2_cache[access_info->new_l2_indx];
+    access_info->install_lvl = L2;
     sim_stats->l2unified_num_accesses++;
     sim_stats->l2unified_num_accesses_insts++;
     l2_hit_indx = cache_hit(access_info);
@@ -241,10 +241,13 @@ int l2_inst_cache_read(cache_access_info *access_info, sim_stats_t *sim_stats, s
         sim_stats->l2unified_num_misses++;
         sim_stats->l2unified_num_misses_insts++;
         install_block(access_info, sim_conf, sim_stats);
+        sim_stats->l2unified_num_bytes_transferred += BLK_SZ(sim_conf->l2unified.b); // read instruction to L2
     } else { // L2 Cache Hit
-        l2_cache[access_info->new_l2_indx].tags[l2_hit_indx].access_count++;
-        l2_cache[access_info->new_l2_indx].tags[l2_hit_indx].time = access_info->line_count;
+        t_set->tags[l2_hit_indx].access_count++;
+        t_set->tags[l2_hit_indx].time = access_info->line_count;
     }
+    access_info->install_lvl = L1I;
+    install_block(access_info, sim_conf, sim_stats);
     return l2_hit_indx;
 }
 
@@ -252,15 +255,13 @@ int l2_inst_cache_read(cache_access_info *access_info, sim_stats_t *sim_stats, s
 void l1_data_cache_read(cache_access_info *access_info, sim_stats_t *sim_stats, sim_config_t *sim_conf) {
     sim_stats->l1data_num_accesses++;
     sim_stats->l1data_num_accesses_loads++;
+    access_info->install_lvl = L1D;
     int l1_hit_indx;
     l1_hit_indx = cache_hit(access_info);
     if (l1_hit_indx < 0) { // L1 Cache Miss
         sim_stats->l1data_num_misses++;
         sim_stats->l1data_num_misses_loads++;
-        access_info->install_lvl = L2;
         l2_data_cache_read(access_info, sim_stats, sim_conf);
-        access_info->install_lvl = L1D;
-        install_block(access_info, sim_conf, sim_stats);
     } else { // L1 Cache Hit
         l1_d_cache[access_info->new_l1_indx].tags[l1_hit_indx].access_count++;
         l1_d_cache[access_info->new_l1_indx].tags[l1_hit_indx].time = access_info->line_count;
@@ -271,18 +272,24 @@ int l2_data_cache_read(cache_access_info *access_info, sim_stats_t *sim_stats, s
     int l2_hit_indx;
     sim_stats->l2unified_num_accesses++;
     sim_stats->l2unified_num_accesses_loads++;
+    access_info->install_lvl = L2;
     cache_set *t_set = &l2_cache[access_info->new_l2_indx];
+
     l2_hit_indx = cache_hit(access_info);
     if (l2_hit_indx < 0) { // L2 Cache Miss
         sim_stats->l2unified_num_misses++;
         sim_stats->l2unified_num_misses_loads++;
         // read new blk from memory
-        sim_stats->l2unified_num_bytes_transferred += TOTAL_BYTES(sim_conf->l2unified.b);
-        install_block(access_info, sim_conf, sim_stats);
+        sim_stats->l2unified_num_bytes_transferred += BLK_SZ(sim_conf->l2unified.b);
+        install_block(access_info, sim_conf, sim_stats); // Install L2
     } else { // L2 Cache Hit
         t_set->tags[l2_hit_indx].access_count++;
         t_set->tags[l2_hit_indx].time = access_info->line_count;
     }
+
+    access_info->install_lvl = L1D;
+    install_block(access_info, sim_conf, sim_stats); // Install L1
+
     return l2_hit_indx;
 }
 
@@ -300,9 +307,6 @@ void l1_data_cache_write(cache_access_info *access_info, sim_stats_t *sim_stats,
                 access_info->install_lvl = L2;
                 access_info->dirty = false;
                 l2_data_cache_write(access_info, sim_stats, sim_conf);
-                access_info->install_lvl = L1D;
-                access_info->dirty = true;
-                install_block(access_info, sim_conf, sim_stats);
             } else { // L1 Write Hit
                 l1_set->tags[l1_hit_indx].valid = true;
                 l1_set->tags[l1_hit_indx].dirty = true;
@@ -323,7 +327,7 @@ void l1_data_cache_write(cache_access_info *access_info, sim_stats_t *sim_stats,
                 access_info->install_lvl = L1D;
             }
             // Transfer to memory anyway
-            sim_stats->l2unified_num_bytes_transferred += TOTAL_BYTES(sim_conf->l2unified.b);
+            sim_stats->l2unified_num_bytes_transferred += BLK_SZ(sim_conf->l2unified.b);
             break;
         default:
             break;
@@ -343,13 +347,16 @@ void l2_data_cache_write(cache_access_info *access_info, sim_stats_t *sim_stats,
                 sim_stats->l2unified_num_misses_stores++;
 //                install_block(access_info, sim_conf, sim_stats); // fetch from memory to L2
                 // Transfer block from Mem to L1 Cache on miss
-                sim_stats->l2unified_num_bytes_transferred += TOTAL_BYTES(sim_conf->l2unified.b);
+                sim_stats->l2unified_num_bytes_transferred += BLK_SZ(sim_conf->l2unified.b);
             } else { // L2 Write Hit
                 t_set->tags[l2_hit_indx].valid = true;
                 t_set->tags[l2_hit_indx].dirty = false;
                 t_set->tags[l2_hit_indx].access_count++;
                 t_set->tags[l2_hit_indx].time = access_info->line_count;
             }
+            access_info->install_lvl = L1D;
+            access_info->dirty = true;
+            install_block(access_info, sim_conf, sim_stats);
             break;
         case WTWNA: // Write Through Write No Alloc
             break;
@@ -369,7 +376,7 @@ void l2_data_cache_write(cache_access_info *access_info, sim_stats_t *sim_stats,
  * @return
  */
 int install_block(cache_access_info *access_info, sim_config_t *sim_conf, sim_stats_t *sim_stats) {
-    int replace_indx = -1;
+    int victim_indx = -1;
     uint64_t new_tag;
     cache_set *t_set;
 
@@ -393,47 +400,35 @@ int install_block(cache_access_info *access_info, sim_config_t *sim_conf, sim_st
     }
 
     if (t_set->tag_count < t_set->tags.size()) { // Compulsory miss
-        replace_indx = t_set->tag_count;
-        t_set->replace_q.push(replace_indx);
+        victim_indx = t_set->tag_count;
+        t_set->replace_q.push(victim_indx);
         t_set->tag_count++;
     } else { // Conflict/Capacity Miss - Find eviction victim
-        replace_indx = get_victim(t_set, sim_conf);
-        if (replace_indx >= 0) {
+        victim_indx = get_victim(t_set, sim_conf);
+        tag victim_tag = t_set->tags[victim_indx];
+        if (victim_indx >= 0) {
             switch (access_info->install_lvl) {
                 case L1D:
                     sim_stats->l1data_num_evictions++;
                     // if evicted blk is dirty and write policy is WBWA then install to L2
-                    if (sim_conf->wp == WBWA &&
-                        t_set->tags[replace_indx].dirty &&
-                        t_set->tags[replace_indx].valid) {
-                        // Install the victim to L2
-                        bool cache_dirty = access_info->dirty;
-                        uint64_t last_time = access_info->line_count;
-
-                        access_info->new_l2_tag = TAG_MASK(t_set->tags[replace_indx].addr,
+                    if (sim_conf->wp == WBWA && victim_tag.dirty && victim_tag.valid) {
+                        /**
+                         Writeback the L1 dirty victim to L2
+                         */
+                        cache_access_info victim_access_info = cache_access_info();
+                        victim_access_info.dirty = victim_tag.dirty;
+                        victim_access_info.new_l2_tag = TAG_MASK(victim_tag.addr,
                                                            sim_conf->l2unified.c,
                                                            sim_conf->l2unified.s);
-                        access_info->new_l2_indx = INDX_MASK(t_set->tags[replace_indx].addr,
-                                                             sim_conf->l2unified.b,
-                                                            sim_conf->l2unified.c - sim_conf->l2unified.b -
-                                                            sim_conf->l2unified.s);
-                        access_info->dirty = true;
-                        access_info->install_lvl = L2;
-                        access_info->line_count = t_set->tags[replace_indx].time;
-
-                        install_block(access_info, sim_conf, sim_stats);
-
-                        // Make L2 tag/indx reset to original block addr
-                        access_info->line_count = last_time;
-                        access_info->new_l2_tag = TAG_MASK(access_info->addr,
-                                                           sim_conf->l2unified.c,
-                                                           sim_conf->l2unified.s);
-                        access_info->new_l2_indx = INDX_MASK(access_info->addr,
+                        victim_access_info.new_l2_indx = INDX_MASK(victim_tag.addr,
                                                              sim_conf->l2unified.b,
                                                              sim_conf->l2unified.c - sim_conf->l2unified.b -
                                                              sim_conf->l2unified.s);
-                        access_info->install_lvl = L1D;
-                        access_info->dirty = cache_dirty;
+                        victim_access_info.dirty = true;
+                        victim_access_info.line_count = victim_tag.time;
+                        victim_access_info.install_lvl = L2;
+                        
+                        install_block(&victim_access_info, sim_conf, sim_stats);
                     }
                     break;
                 case L1I:
@@ -441,29 +436,27 @@ int install_block(cache_access_info *access_info, sim_config_t *sim_conf, sim_st
                     break;
                 case L2:
                     sim_stats->l2unified_num_evictions++;
-                    if (sim_conf->wp == WBWA &&
-                        t_set->tags[replace_indx].dirty &&
-                        t_set->tags[replace_indx].valid) {
+                    if (sim_conf->wp == WBWA && victim_tag.dirty && victim_tag.valid) {
                         sim_stats->l2unified_num_write_backs++;
                         // write dirty evicted blk to memory for WBWA
-                        sim_stats->l2unified_num_bytes_transferred += TOTAL_BYTES(sim_conf->l2unified.b);
+                        sim_stats->l2unified_num_bytes_transferred += BLK_SZ(sim_conf->l2unified.b);
                     }
                     break;
             }
 
         }
     }
-    if (replace_indx >= 0) {
-        t_set->tags[replace_indx].valid = true;
-        t_set->tags[replace_indx].dirty = access_info->dirty;
-        t_set->tags[replace_indx].access_count = 1;
-        t_set->tags[replace_indx].time = access_info->line_count;
-        t_set->tags[replace_indx].tag_id = new_tag;
-        t_set->tags[replace_indx].addr = access_info->addr;
+    if (victim_indx >= 0) {
+        t_set->tags[victim_indx].valid = true;
+        t_set->tags[victim_indx].dirty = access_info->dirty;
+        t_set->tags[victim_indx].access_count = 1;
+        t_set->tags[victim_indx].time = access_info->line_count;
+        t_set->tags[victim_indx].tag_id = new_tag;
+        t_set->tags[victim_indx].addr = access_info->addr;
     } else {
         cout << "Cache Read Replace Indx < 0!" << endl;
     }
-    return replace_indx;
+    return victim_indx;
 }
 
 /**
