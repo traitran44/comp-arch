@@ -168,7 +168,7 @@ void cache_access(uint64_t addr, char type, uint64_t line_count,
     access_info.addr = addr;
     access_info.update_accesses = true;
     switch (type) {
-        case LOAD: // access data cache
+        case LOAD: // load data cache
             indx_mask_l1 = sim_conf->l1data.c - sim_conf->l1data.b - sim_conf->l1data.s;
             offset_mask_l1 = sim_conf->l1data.b;
             tag_d = TAG_MASK(addr, sim_conf->l1data.c, sim_conf->l1data.s);
@@ -179,7 +179,7 @@ void cache_access(uint64_t addr, char type, uint64_t line_count,
             access_info.dirty = false;
             l1_data_cache_load(&access_info, sim_stats, sim_conf);
             break;
-        case STORE: // access data cache
+        case STORE: // store data cache
             indx_mask_l1 = sim_conf->l1data.c - sim_conf->l1data.b - sim_conf->l1data.s;
             offset_mask_l1 = sim_conf->l1data.b;
             tag_d = TAG_MASK(addr, sim_conf->l1data.c, sim_conf->l1data.s);
@@ -335,7 +335,6 @@ void l2_data_cache_store(cache_access_info *access_info, sim_stats_t *sim_stats,
             if (l2_hit_indx < 0) { // L2 Write miss
                 sim_stats->l2unified_num_misses++;
                 sim_stats->l2unified_num_misses_stores++;
-//                install_block(access_info, sim_conf, sim_stats); // fetch from memory to L2
 
                 // Transfer block from Mem to L2 Cache on miss
                 sim_stats->l2unified_num_bytes_transferred += BLK_SZ(sim_conf->l2unified.b);
@@ -349,7 +348,7 @@ void l2_data_cache_store(cache_access_info *access_info, sim_stats_t *sim_stats,
             }
             access_info->install_lvl = L1D;
             access_info->dirty = true;
-            install_block(access_info, sim_conf, sim_stats);
+            install_block(access_info, sim_conf, sim_stats); // Install L1D
             break;
         case WTWNA: // Write Through Write No Alloc
             break;
@@ -397,7 +396,7 @@ int install_block(cache_access_info *access_info, sim_config_t *sim_conf, sim_st
                     if (sim_conf->wp == WBWA && victim_tag.dirty && victim_tag.valid) {
                         /**
                          Writeback the L1D dirty victim to L2
-                         */
+                        */
                         cache_access_info victim_access_info = cache_access_info();
                         victim_access_info.dirty = victim_tag.dirty;
                         victim_access_info.new_l1_tag = TAG_MASK(victim_tag.addr,
@@ -417,7 +416,16 @@ int install_block(cache_access_info *access_info, sim_config_t *sim_conf, sim_st
                         victim_access_info.line_count = victim_tag.time;
                         victim_access_info.install_lvl = L2;
 
-                        install_block(&victim_access_info, sim_conf, sim_stats);
+                        uint64_t l2_victim_hit_indx = cache_hit(&victim_access_info);
+                        if (l2_victim_hit_indx < 0) {
+                            install_block(&victim_access_info, sim_conf, sim_stats);
+                        } else {
+                            cache_set *victim_tset = &l2_cache[victim_access_info.new_l2_indx];
+                            victim_tset->tags[l2_victim_hit_indx].dirty = true;
+                            victim_tset->tags[l2_victim_hit_indx].time = access_info->line_count;
+                            victim_tset->tags[l2_victim_hit_indx].access_count++;
+                        }
+                        // check L2 if already contained
                     }
                     break;
                 case L1I:
