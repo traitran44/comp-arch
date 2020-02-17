@@ -298,6 +298,7 @@ void l1_data_cache_write(cache_access_info *access_info, sim_stats_t *sim_stats,
                 sim_stats->l1data_num_misses++;
                 sim_stats->l1data_num_misses_stores++;
                 access_info->install_lvl = L2;
+                access_info->dirty = false;
                 l2_data_cache_write(access_info, sim_stats, sim_conf);
                 access_info->install_lvl = L1D;
                 access_info->dirty = true;
@@ -340,8 +341,7 @@ void l2_data_cache_write(cache_access_info *access_info, sim_stats_t *sim_stats,
             if (l2_hit_indx < 0) { // L2 Write miss
                 sim_stats->l2unified_num_misses++;
                 sim_stats->l2unified_num_misses_stores++;
-                access_info->dirty = false;
-                install_block(access_info, sim_conf, sim_stats); // fetch from memory to L2
+//                install_block(access_info, sim_conf, sim_stats); // fetch from memory to L2
                 // Transfer block from Mem to L1 Cache on miss
                 sim_stats->l2unified_num_bytes_transferred += TOTAL_BYTES(sim_conf->l2unified.b);
             } else { // L2 Write Hit
@@ -407,6 +407,9 @@ int install_block(cache_access_info *access_info, sim_config_t *sim_conf, sim_st
                         t_set->tags[replace_indx].dirty &&
                         t_set->tags[replace_indx].valid) {
                         // Install the victim to L2
+                        bool cache_dirty = access_info->dirty;
+                        uint64_t last_time = access_info->line_count;
+
                         access_info->new_l2_tag = TAG_MASK(t_set->tags[replace_indx].addr,
                                                            sim_conf->l2unified.c,
                                                            sim_conf->l2unified.s);
@@ -414,12 +417,14 @@ int install_block(cache_access_info *access_info, sim_config_t *sim_conf, sim_st
                                                              sim_conf->l2unified.b,
                                                             sim_conf->l2unified.c - sim_conf->l2unified.b -
                                                             sim_conf->l2unified.s);
-                        bool cache_dirty = access_info->dirty;
                         access_info->dirty = true;
                         access_info->install_lvl = L2;
+                        access_info->line_count = t_set->tags[replace_indx].time;
+
                         install_block(access_info, sim_conf, sim_stats);
 
                         // Make L2 tag/indx reset to original block addr
+                        access_info->line_count = last_time;
                         access_info->new_l2_tag = TAG_MASK(access_info->addr,
                                                            sim_conf->l2unified.c,
                                                            sim_conf->l2unified.s);
@@ -543,7 +548,7 @@ int cache_hit(cache_access_info *access_info) {
             t_set = NULL;
             break;
     }
-    for (uint64_t i = 0; i < l2_cache[access_info->new_l2_indx].tags.size(); ++i) {
+    for (uint64_t i = 0; i < t_set->tags.size(); ++i) {
         if (t_set->tags[i].tag_id == match_tag &&
             t_set->tags[i].valid) {
             match_indx = i;
