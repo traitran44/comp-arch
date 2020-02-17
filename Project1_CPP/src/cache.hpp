@@ -25,7 +25,7 @@ using namespace std;
 
 #define TAG_MASK(addr, c, s) (addr >> (c - s))
 #define INDX_BITS(indx_mask) ((1 << indx_mask) - 1)
-#define INDX_MASK(addr, offset, indx_mask) ((addr >> offset) & INDX_BITS((indx_mask)))
+#define INDX_MASK(addr, b, indx_mask) ((addr >> b) & INDX_BITS((indx_mask)))
 #define BLK_SZ(b) (((uint64_t) 1) << b)
 
 struct tag {

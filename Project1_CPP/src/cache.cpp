@@ -231,14 +231,14 @@ int l2_inst_cache_load(cache_access_info *access_info, sim_stats_t *sim_stats, s
     if (l2_hit_indx < 0) { // L2 Cache Miss
         sim_stats->l2unified_num_misses++;
         sim_stats->l2unified_num_misses_insts++;
-        install_block(access_info, sim_conf, sim_stats);
+        install_block(access_info, sim_conf, sim_stats); // Install instructions to L2
         sim_stats->l2unified_num_bytes_transferred += BLK_SZ(sim_conf->l2unified.b); // read instruction to L2
     } else { // L2 Cache Hit
         t_set->tags[l2_hit_indx].access_count++;
         t_set->tags[l2_hit_indx].time = access_info->line_count;
     }
     access_info->install_lvl = L1I;
-    install_block(access_info, sim_conf, sim_stats);
+    install_block(access_info, sim_conf, sim_stats); // Install instructions to L1
     return l2_hit_indx;
 }
 
@@ -386,7 +386,7 @@ int install_block(cache_access_info *access_info, sim_config_t *sim_conf, sim_st
         victim_indx = t_set->tag_count;
         t_set->replace_q.push(victim_indx);
         t_set->tag_count++;
-    } else { // Conflict/Capacity Miss - Find eviction victim
+    } else { // Capacity Miss - Find eviction victim
         victim_indx = get_victim(t_set, sim_conf);
         tag victim_tag = t_set->tags[victim_indx];
         if (victim_indx >= 0) {
@@ -396,7 +396,7 @@ int install_block(cache_access_info *access_info, sim_config_t *sim_conf, sim_st
                     // if evicted blk is dirty and write policy is WBWA then install to L2
                     if (sim_conf->wp == WBWA && victim_tag.dirty && victim_tag.valid) {
                         /**
-                         Writeback the L1 dirty victim to L2
+                         Writeback the L1D dirty victim to L2
                          */
                         cache_access_info victim_access_info = cache_access_info();
                         victim_access_info.dirty = victim_tag.dirty;
